@@ -14,7 +14,8 @@
 
 using namespace std;
 
-const static int block_size = 4096;
+constexpr static int block_size = 4096;
+vector<string> valid_cmds = {"erase", "new", "zero"};
 
 struct Data {
   int version;
@@ -23,11 +24,10 @@ struct Data {
 };
 
 bool file_exists(const string &filename) {
-  ifstream f(filename.c_str());
+  ifstream f(filename.data());
   return f.good();
 }
 
-vector<string> valid_cmds = {"erase", "new", "zero"};
 void check_cmd(const string &cmd) {
   for (auto i : valid_cmds) {
     if (i == cmd)
@@ -65,15 +65,11 @@ vector<string> split(const string &str, char delimiter) {
 vector<int> rangeset(string src) {
   vector<string> src_set = split(src, ',');
   vector<int> num_set = vector_string2int(src_set);
-  if (num_set.size() != static_cast<size_t>(num_set[0] + 1)) {
-    cerr << "Error on parsing following data to rangeset: " << src << endl;
-    exit(1);
-  }
   vector<int> ret;
   for (size_t i = 1; i < num_set.size(); i++) {
     ret.push_back(num_set[i]);
   }
-  if (ret.size() % 2 != 0) { // Pairs only.
+  if (num_set.size() != static_cast<size_t>(num_set[0] + 1) || ret.size() % 2 != 0) {
     cerr << "Error on parsing following data to rangeset: " << src << endl;
     exit(1);
   }
@@ -232,7 +228,7 @@ int main(int argc, const char *argv[]) {
     }
   }
 
-  // new_blocks is the one defined on file while
+  // new_blocks is the one defined on file,
   // max_second is the one we calculated.
   // They both should be the same.
   if (max_second != new_blocks) {
@@ -240,11 +236,11 @@ int main(int argc, const char *argv[]) {
     exit(1);
   }
 
-  long max_file_size = max_second * block_size;
+  long long max_file_size = max_second * block_size;
 
-  output.seekp(0, ios::beg);
   string cmd;
   int block_count, begin, end;
+  char buffer[block_size];
 
   for (auto p : commands) {
     cmd = p.first;
@@ -257,7 +253,6 @@ int main(int argc, const char *argv[]) {
              << "..." << endl;
         output.seekp(begin * block_size, ios::beg);
         while (block_count > 0) {
-          char buffer[block_size];
           input_dat.read(buffer, block_size);
           output.write(buffer, block_size);
           block_count--;
@@ -267,6 +262,7 @@ int main(int argc, const char *argv[]) {
       cout << "Skipping command " << cmd << "..." << endl;
     }
   }
+
   output.close();
   input_dat.close();
 
