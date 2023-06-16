@@ -228,14 +228,6 @@ int main(int argc, const char *argv[]) {
     }
   }
 
-  // new_blocks is the one defined on file,
-  // max_second is the one we calculated.
-  // They both should be the same.
-  if (max_second != new_blocks) {
-    cerr << "Failed to parse total blocks." << endl;
-    exit(1);
-  }
-
   long long max_file_size = max_second * block_size;
 
   string cmd;
