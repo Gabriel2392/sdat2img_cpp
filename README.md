@@ -15,16 +15,22 @@ make
 
 ## Usage
 ```
-./sdat2img <transfer_list> <system_new_file> <system_img>
+./sdat2img <transfer_list> <system_new_file> [system_img]
 ```
 - `<transfer_list>` = input, system.transfer.list from rom zip
 - `<system_new_file>` = input, system.new.dat from rom zip
-- `<system_img>` = output ext4 raw image file
+- `[system_img]` = output ext4 raw image file
 
 
 
 ## Example
 This is a simple example on a Linux system: 
 ```
-~$ ./sdat2img system.transfer.list system.new.dat system.img
+~$ ./sdat2img vendor.transfer.list vendor.new.dat vendor.img
+```
+
+- OR
+
+```
+~$ ./sdat2img system.transfer.list system.new.dat
 ```

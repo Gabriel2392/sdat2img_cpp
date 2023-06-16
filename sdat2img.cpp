@@ -12,23 +12,26 @@
 #include <utility>
 #include <vector>
 
-using namespace std;
+#define DEFAULT_OUTPUT "system.img"
+#define BLOCK_SIZE 4096
 
-constexpr static int block_size = 4096;
+using namespace std;
+using ll = long long;
+using command_vector = vector<pair<string, vector<pair<int, int>>>>;
+
 vector<string> valid_cmds = {"erase", "new", "zero"};
 
 struct Data {
   int version;
-  int new_blocks;
-  vector<pair<string, vector<pair<int, int>>>> commands;
+  command_vector commands;
 };
 
-bool file_exists(const string &filename) {
+bool file_exists(const string& filename) {
   ifstream f(filename.data());
   return f.good();
 }
 
-void check_cmd(const string &cmd) {
+void check_cmd(const string& cmd) {
   for (auto i : valid_cmds) {
     if (i == cmd)
       return;
@@ -37,7 +40,7 @@ void check_cmd(const string &cmd) {
   exit(1);
 }
 
-vector<int> vector_string2int(vector<string> src) {
+vector<int> vector_string2int(const vector<string>& src) {
   vector<int> tokens;
   int token;
   for (auto i : src) {
@@ -52,7 +55,7 @@ vector<int> vector_string2int(vector<string> src) {
   return tokens;
 }
 
-vector<string> split(const string &str, char delimiter) {
+vector<string> split(const string &str, const char& delimiter) {
   vector<string> tokens;
   stringstream ss(str);
   string token;
@@ -62,7 +65,7 @@ vector<string> split(const string &str, char delimiter) {
   return tokens;
 }
 
-vector<int> rangeset(string src) {
+vector<int> rangeset(const string& src) {
   vector<string> src_set = split(src, ',');
   vector<int> num_set = vector_string2int(src_set);
   vector<int> ret;
@@ -76,16 +79,18 @@ vector<int> rangeset(string src) {
   return ret;
 }
 
-Data parse_transfer_list(const string &transfer_list_file) {
+Data parse_transfer_list(const string& transfer_list_file) {
+  int version;
+  string hold, line, cmd;
+  vector<int> nums;
+  command_vector commands;
+  Data result;
+
   ifstream file(transfer_list_file);
   if (!file.is_open()) {
     perror("open");
     exit(1);
   }
-  Data result;
-
-  int version, new_blocks;
-  string hold;
 
   // First line is the version
   getline(file, hold);
@@ -96,24 +101,15 @@ Data parse_transfer_list(const string &transfer_list_file) {
     exit(1);
   }
 
-  // Second line is total number of blocks
+  // Second line is total number of blocks. Ignore it though.
+  // We are going to calculate it by ourselves.
   getline(file, hold);
-  try {
-    new_blocks = stoi(hold);
-  } catch (...) {
-    cerr << "Could not determine total number of blocks." << endl;
-    exit(1);
-  }
 
   // Skip those 2 lines if version >= 2
   if (version >= 2) {
     getline(file, hold);
     getline(file, hold);
   }
-
-  string line, cmd;
-  vector<int> nums;
-  vector<pair<string, vector<pair<int, int>>>> commands;
 
   // Loop through all lines
   while (file.peek() != EOF) {
@@ -136,20 +132,21 @@ Data parse_transfer_list(const string &transfer_list_file) {
   file.close();
 
   result.version = version;
-  result.new_blocks = new_blocks;
   result.commands = commands;
 
   return result;
 }
 
-void resize_file(string path, long new_size) {
+void resize_file(const string& path, const ll& new_size) {
+  ll size;
+
   fstream file(path.data(), ios::in | ios::out | ios::binary);
   if (!file) {
     cerr << "Error resizing file." << endl;
     exit(1);
   }
   file.seekg(0, ios::end);
-  streamsize size = file.tellg();
+  size = file.tellg();
   file.seekg(0, ios::beg);
   if (size < new_size) { // Only resize if needed.
     file.seekp(new_size - 1);
@@ -169,17 +166,26 @@ void usage(const char *exe) {
 }
 
 int main(int argc, const char *argv[]) {
-  if (argc != 4) {
+  ll max_file_size;
+  string cmd, transfer_list_file, new_dat_file, output_img;
+  int block_count, begin, end, version, max_second;
+  char buffer[BLOCK_SIZE];
+
+  if (argc != 4 && argc != 3) {
     usage(argv[0]);
   }
-  string transfer_list_file = argv[1];
-  string new_dat_file = argv[2];
-  string output_img = argv[3];
+
+  transfer_list_file = argv[1];
+  new_dat_file = argv[2];
+  if (argc == 3) {
+      output_img = DEFAULT_OUTPUT;
+  } else {
+      output_img = argv[3];
+  }
 
   Data parsed = parse_transfer_list(transfer_list_file);
-  int version = parsed.version;
-  int new_blocks = parsed.new_blocks;
-  vector<pair<string, vector<pair<int, int>>>> commands = parsed.commands;
+  command_vector commands = parsed.commands;
+  version = parsed.version;
 
   if (version == 1) {
     cout << "Android 5.0 detected!" << endl;
@@ -221,26 +227,14 @@ int main(int argc, const char *argv[]) {
     }
   }
 
-  int max_second = 0;
+  max_second = 0;
   for (const auto &pair : all_block_sets) {
     if (pair.second > max_second) {
       max_second = pair.second;
     }
   }
 
-  // new_blocks is the one defined on file,
-  // max_second is the one we calculated.
-  // They both should be the same.
-  if (max_second != new_blocks) {
-    cerr << "Failed to parse total blocks." << endl;
-    exit(1);
-  }
-
-  long long max_file_size = max_second * block_size;
-
-  string cmd;
-  int block_count, begin, end;
-  char buffer[block_size];
+  max_file_size = max_second * BLOCK_SIZE;
 
   for (auto p : commands) {
     cmd = p.first;
@@ -251,10 +245,10 @@ int main(int argc, const char *argv[]) {
         block_count = end - begin;
         cout << "Copying " << block_count << " blocks into position " << begin
              << "..." << endl;
-        output.seekp(begin * block_size, ios::beg);
+        output.seekp(begin * BLOCK_SIZE, ios::beg);
         while (block_count > 0) {
-          input_dat.read(buffer, block_size);
-          output.write(buffer, block_size);
+          input_dat.read(buffer, BLOCK_SIZE);
+          output.write(buffer, BLOCK_SIZE);
           block_count--;
         }
       }
